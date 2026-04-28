@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Progex > Terminal{% endblock %}</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=VT323&display=swap" rel="stylesheet">
+    <link rel="icon" href="{{ url_for('static', filename='images/favicon.ico') }}" type="image/x-icon" />
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        mono: ['Space Mono', 'monospace'],
+                        display: ['VT323', 'monospace'],
+                    },
+                    colors: {
+                        'primary-green': '#00ff41', 'dark-bg': '#0a0a0a',
+                        'dark-card': '#1a1a1a', 'accent-red': '#ff4141',
+                        'accent-amber': '#ffb800',
+                    },
+                    animation: {
+                        'glitch': 'glitch 1.5s linear infinite',
+                        'blink': 'blink-caret 1s step-end infinite',
+                    },
+                    keyframes: {
+                        glitch: { '2%, 64%': { transform: 'translate(2px, 0) skew(0deg)' }, '4%, 60%': { transform: 'translate(-2px, 0) skew(0deg)' }, '62%': { transform: 'translate(0, 0) skew(5deg)' }, },
+                        'blink-caret': { 'from, to': { borderColor: 'transparent' }, '50%': { borderColor: '#00ff41' }, },
+                    }
+                },
+            },
+        };
+        document.documentElement.classList.add('dark');
+    </script>
+
+    <style>
+        html, body { overflow-x: hidden; background-color: #0a0a0a; }
+        body { font-family: 'Space Mono', monospace; position: relative; color: #E0E0E0; }
+        #matrix-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -2; }
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #1a1a1a; }
+        ::-webkit-scrollbar-thumb { background: #00ff41; border-radius: 0; border: 2px solid #1a1a1a; }
+        .difficulty-easy { color: #00ff41; font-weight: 700; text-shadow: 0 0 5px #00ff41; }
+        .difficulty-medium { color: #ffb800; font-weight: 700; text-shadow: 0 0 5px #ffb800; }
+        .difficulty-hard { color: #ff4141; font-weight: 700; text-shadow: 0 0 5px #ff4141; }
+        .loader { border: 2px solid rgba(255, 255, 255, 0.2); border-top: 2px solid #00ff41; border-radius: 50%; width: 1rem; height: 1rem; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .blinking-cursor::after { content: '_'; animation: blink 1s step-end infinite; margin-left: 4px; }
+        @keyframes pulse-dot { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+        .notification-dot { animation: pulse-dot 1.s infinite ease-in-out; }
+    </style>
+</head>
+
+<body class="bg-dark-bg text-slate-200 antialiased font-mono selection:bg-primary-green selection:text-dark-bg min-h-screen">
+    
+    <canvas id="matrix-canvas"></canvas>
+
+    <nav class="bg-dark-bg/80 backdrop-blur-sm sticky top-0 z-50 border-b-2 border-primary-green/30">
+        <div class="max-w-screen-xl mx-auto px-6 sm:px-10">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex-shrink-0">
+                    <a href="{{ url_for('dashboard.user_dashboard') if session.leetcode_username else url_for('main.home') }}" class="font-display text-4xl font-bold text-primary-green tracking-wider relative inline-block">
+                       <span class="animate-glitch" style="text-shadow: 0 0 8px #00ff41;">Progex</span><span class="blinking-cursor"></span>
+                    </a>
+                </div>
+                <div class="flex items-center">
+                    <div class="hidden sm:flex sm:items-center sm:space-x-6 font-mono text-sm">
+                        {% if session.leetcode_username %}
+                            <a href="{{ url_for('dashboard.user_dashboard') }}" class="text-slate-300 hover:text-primary-green transition-colors duration-300 before:content-['>_'] before:opacity-0 hover:before:opacity-100 before:mr-1 before:transition-opacity">Dashboard</a>
+                            <a href="{{ url_for('social.friends_page') }}" class="text-slate-300 hover:text-primary-green transition-colors duration-300 before:content-['>_'] before:opacity-0 hover:before:opacity-100 before:mr-1 before:transition-opacity">Friends</a>
+                            <a href="{{ url_for('social.requests_page') }}" class="text-slate-300 hover:text-primary-green transition-colors duration-300 relative before:content-['>_'] before:opacity-0 hover:before:opacity-100 before:mr-1 before:transition-opacity">
+                                Requests
+                                {% if pending_requests_count > 0 %}<span class="absolute -top-1 -right-2 flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>{% endif %}
+                            </a>
+                            <a href="{{ url_for('social.leaderboard_page') }}" class="text-slate-300 hover:text-primary-green transition-colors duration-300 before:content-['>_'] before:opacity-0 hover:before:opacity-100 before:mr-1 before:transition-opacity">Leaderboard</a>
+                            <a href="{{ url_for('challenges.challenges_page') }}" class="text-slate-300 hover:text-primary-green transition-colors duration-300 before:content-['>_'] before:opacity-0 hover:before:opacity-100 before:mr-1 before:transition-opacity">Challenges</a>
+                            <a href="{{ url_for('study_plan.view_study_plan') }}" class="text-slate-300 hover:text-primary-green transition-colors duration-300 before:content-['>_'] before:opacity-0 hover:before:opacity-100 before:mr-1 before:transition-opacity">Study Plan</a>
+                            <a href="{{ url_for('main.about_page') }}" class="text-slate-300 hover:text-primary-green transition-colors duration-300 before:content-['>_'] before:opacity-0 hover:before:opacity-100 before:mr-1 before:transition-opacity">About</a>
+                            <a href="{{ url_for('main.logout') }}" class="text-slate-300 hover:text-accent-red transition-colors duration-300 before:content-['>_'] before:opacity-0 hover:before:opacity-100 before:mr-1 before:transition-opacity">Logout</a>
+                        {% else %}
+                            <a href="{{ url_for('main.home') }}" class="text-slate-300 hover:text-primary-green transition-colors duration-300 before:content-['>_'] before:opacity-0 hover:before:opacity-100 before:mr-1 before:transition-opacity">Home</a>
+                            <a href="{{ url_for('main.about_page') }}" class="text-slate-300 hover:text-primary-green transition-colors duration-300 before:content-['>_'] before:opacity-0 hover:before:opacity-100 before:mr-1 before:transition-opacity">About</a>
+                            <a href="{{ url_for('auth.login') }}" class="text-slate-300 hover:text-primary-green transition-colors duration-300 before:content-['>_'] before:opacity-0 hover:before:opacity-100 before:mr-1 before:transition-opacity">Login</a>
+                            <a href="{{ url_for('auth.register') }}" class="ml-4 px-5 py-2 border-2 border-primary-green text-primary-green font-bold hover:bg-primary-green hover:text-dark-bg transition-all duration-300 shadow-[0_0_10px_#00ff41]">Register</a>
+                        {% endif %}
+                    </div>
+                    <div class="sm:hidden flex items-center">
+                        <button type="button" id="mobile-menu-button" class="ml-2 text-slate-300 hover:text-primary-green focus:outline-none p-2 rounded-md">
+                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="sm:hidden hidden" id="mobile-menu">
+            <div class="px-2 pt-2 pb-3 space-y-1 border-t-2 border-primary-green/30">
+                {% if session.leetcode_username %}
+                    <a href="{{ url_for('dashboard.user_dashboard') }}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-dark-card hover:text-primary-green">> Dashboard</a>
+                    <a href="{{ url_for('social.friends_page') }}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-dark-card hover:text-primary-green">> Friends</a>
+                    <a href="{{ url_for('social.requests_page') }}" class="relative block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-dark-card hover:text-primary-green">> Requests {% if pending_requests_count > 0 %}<span class="absolute top-1/2 right-4 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">{{ pending_requests_count }}</span>{% endif %}</a>
+                    <a href="{{ url_for('social.leaderboard_page') }}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-dark-card hover:text-primary-green">> Leaderboard</a>
+                    <a href="{{ url_for('challenges.challenges_page') }}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-dark-card hover:text-primary-green">> Challenges</a>
+                    <a href="{{ url_for('study_plan.view_study_plan') }}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-dark-card hover:text-primary-green">> Study Plan</a>
+                    <a href="{{ url_for('main.about_page') }}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-dark-card hover:text-primary-green">> About</a>
+                    <a href="{{ url_for('main.logout') }}" class="block px-3 py-2 rounded-md text-base font-medium text-accent-red hover:bg-red-900/50 hover:text-white">> Logout</a>
+                {% else %}
+                    <a href="{{ url_for('main.home') }}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-dark-card hover:text-primary-green">> Home</a>
+                    <a href="{{ url_for('main.about_page') }}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-dark-card hover:text-primary-green">> About</a>
+                    <a href="{{ url_for('auth.login') }}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-300 hover:bg-dark-card hover:text-primary-green">> Login</a>
+                    <a href="{{ url_for('auth.register') }}" class="block px-3 py-2 rounded-md text-base font-medium text-primary-green hover:bg-primary-green hover:text-dark-bg">> Register</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <main class="w-full min-h-screen px-6 sm:px-10 lg:px-16 py-10 sm:py-14">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}<div class="space-y-3 mb-8">{% for category, message in messages %}<div class="max-w-4xl mx-auto p-4 border-l-4 font-mono text-sm {% if category == 'error' %}bg-accent-red/10 border-accent-red text-red-300 shadow-[inset_0_0_10px_rgba(255,65,65,0.2)]{% else %}bg-primary-green/10 border-primary-green text-green-300 shadow-[inset_0_0_10px_rgba(0,255,65,0.2)]{% endif %}"><p><span class="font-bold mr-2">{% if category == 'error' %}[ERROR] >{% else %}[SUCCESS] >{% endif %}</span>{{ message }}</p></div>{% endfor %}</div>{% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/form_handler.js') }}"></script>
+    
+    {% if not session.leetcode_username %}
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDB6-LBI3NTUdhqVOSpYo9FSISbUNTZzG0",
+            authDomain: "progex-97b50.firebaseapp.com",
+            projectId: "progex-97b50",
+            storageBucket: "progex-97b50.appspot.com",
+            messagingSenderId: "803295179415",
+            appId: "1:803295179415:web:a31310745066cda5bfafd2",
+            measurementId: "G-JCTYVPL4S4"
+        };
+        firebase.initializeApp(firebaseConfig);
+    </script>
+    <script src="{{ url_for('static', filename='js/google_auth.js') }}"></script>
+    {% endif %}
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuButton = document.getElementById('mobile-menu-button');
+            const mobileMenu = document.getElementById('mobile-menu');
+            if (mobileMenuButton && mobileMenu) { mobileMenuButton.addEventListener('click', function() { mobileMenu.classList.toggle('hidden'); }); }
+            
+            const canvas = document.getElementById('matrix-canvas');
+            if(canvas) {
+                const ctx = canvas.getContext('2d');
+                let width = canvas.width = window.innerWidth;
+                let height = canvas.height = window.innerHeight;
+                const characters = 'アァカサタナハマヤャラワガザダバパイキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッン01';
+                const fontSize = 14;
+                let columns = Math.floor(width / fontSize);
+                let drops = Array(columns).fill(1);
+                function draw() {
+                    ctx.fillStyle = 'rgba(10, 10, 10, 0.04)';
+                    ctx.fillRect(0, 0, width, height);
+                    ctx.fillStyle = '#00ff41'; ctx.font = fontSize + 'px monospace';
+                    for (let i = 0; i < drops.length; i++) {
+                        const text = characters.charAt(Math.floor(Math.random() * characters.length));
+                        ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                        if (drops[i] * fontSize > height && Math.random() > 0.975) { drops[i] = 0; }
+                        drops[i]++;
+                    }
+                }
+                setInterval(draw, 33);
+                window.addEventListener('resize', () => {
+                    width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight;
+                    columns = Math.floor(width / fontSize); drops = Array(columns).fill(1);
+                });
+            }
+        });
+    </script>
+
+    <!-- THIS IS THE FINAL FIX: A placeholder for page-specific scripts -->
+    {% block scripts %}{% endblock %}
+
+</body>
+</html>```
